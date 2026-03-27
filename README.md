@@ -94,25 +94,6 @@ BLE Sensor (Xiaomi LYWSD03MMC)
 * Direct connection from mobile device
 * No internet required
 
----
-
-## 📂 Project Structure
-
-```text
-trastero-monitor/
-├── ble_reader.py        # BLE sensor reading logic
-├── database.py          # SQLite helper functions
-├── app.py               # Flask web server
-├── data.db              # SQLite database (generated)
-├── templates/
-│   └── index.html       # Web UI
-├── static/              # JS / CSS (optional)
-├── requirements.txt
-└── README.md
-```
-
----
-
 ## ⚙️ Setup
 
 ### 1. Install OS
@@ -205,36 +186,3 @@ Recommended approach:
 * Recommended BLE advertising interval: **5–10 seconds**
 * Ensure stable power supply for Raspberry Pi
 * Use firmware (ATC/pvvx) on sensor for easier BLE parsing
-
----
-
-## 🔮 Future Improvements
-
-* Multiple sensor support
-* Alerts (e.g., high humidity)
-* MQTT integration
-* Home Assistant integration
-* Alexa support (via HA)
-* Data export (CSV/API)
-* Advanced dashboards
-
----
-
-## ⚠️ Limitations
-
-* Designed for low-resource hardware (Pi Zero W)
-* No cloud sync (by design)
-* BLE range limitations
-
----
-
-## 📜 License
-
-MIT License (or define your own)
-
----
-
-## 👨‍💻 Author
-
-Personal project for learning and practical IoT deployment using low-power hardware.
-
