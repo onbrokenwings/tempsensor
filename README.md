@@ -94,6 +94,19 @@ BLE Sensor (Xiaomi LYWSD03MMC)
 * Direct connection from mobile device
 * No internet required
 
+---
+
+## ▶️ Quick BLE Validation
+
+Run the interactive reader to scan nearby devices and choose the sensor from the console:
+
+```bash
+pip3 install -r requirements.txt
+python3 ble_reader.py
+```
+
+It will try to read temperature, humidity, and battery every few seconds.
+
 ## ⚙️ Setup
 
 ### 1. Install OS
