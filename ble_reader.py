@@ -15,7 +15,10 @@ from typing import Iterable, Optional
 from bleak import BleakClient, BleakScanner
 
 
-TEMP_UUID = "00002a6e-0000-1000-8000-00805f9b34fb"
+TEMP_UUIDS = [
+    "00002a1f-0000-1000-8000-00805f9b34fb",
+    "00002a6e-0000-1000-8000-00805f9b34fb",
+]
 HUMIDITY_UUID = "00002a6f-0000-1000-8000-00805f9b34fb"
 BATTERY_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 
@@ -108,7 +111,7 @@ def choose_device(devices: list) -> Optional[object]:
 async def read_value(client: BleakClient, uuid: str, name: str, unit: str, signed: bool) -> Reading:
     data = await client.read_gatt_char(uuid)
     if name == "temperature":
-        value = parse_fixed_point(data, signed=signed, scale=100.0)
+        value = parse_fixed_point(data, signed=signed, scale=10.0)
     elif name == "humidity":
         value = parse_fixed_point(data, signed=False, scale=100.0)
     elif name == "battery":
@@ -118,12 +121,27 @@ async def read_value(client: BleakClient, uuid: str, name: str, unit: str, signe
     return Reading(name=name, value=value, raw=data, unit=unit)
 
 
+async def read_first_available(
+    client: BleakClient, uuids: Iterable[str], name: str, unit: str, signed: bool
+) -> Reading:
+    last_error: Exception | None = None
+
+    for uuid in uuids:
+        try:
+            return await read_value(client, uuid, name, unit, signed)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+
+    assert last_error is not None
+    raise last_error
+
+
 async def read_sensor(address_or_device: object, interval: float) -> None:
     async with BleakClient(address_or_device) as client:
         print("\nConectado. Leyendo valores...\n")
         while True:
             try:
-                temp = await read_value(client, TEMP_UUID, "temperature", "°C", signed=True)
+                temp = await read_first_available(client, TEMP_UUIDS, "temperature", "°C", signed=True)
                 humidity = await read_value(client, HUMIDITY_UUID, "humidity", "%", signed=False)
                 battery = await read_value(client, BATTERY_UUID, "battery", "%", signed=False)
 

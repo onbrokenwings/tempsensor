@@ -1,0 +1,84 @@
+Primary Service (Handle 0x001b)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service001b
+        00001f10-0000-1000-8000-00805f9b34fb
+        Unknown
+Characteristic (Handle 0x001c)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service001b/char001c
+        00001f1f-0000-1000-8000-00805f9b34fb
+        Unknown
+Descriptor (Handle 0x001e)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service001b/char001c/desc001e
+        00002902-0000-1000-8000-00805f9b34fb
+        Client Characteristic Configuration
+Primary Service (Handle 0x0017)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0017
+        00010203-0405-0607-0809-0a0b0c0d1912
+        Vendor specific
+Characteristic (Handle 0x0018)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0017/char0018
+        00010203-0405-0607-0809-0a0b0c0d2b12
+        Vendor specific
+Descriptor (Handle 0x001a)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0017/char0018/desc001a
+        00002901-0000-1000-8000-00805f9b34fb
+        Characteristic User Description
+Primary Service (Handle 0x0010)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0010
+        0000181a-0000-1000-8000-00805f9b34fb
+        Environmental Sensing
+Characteristic (Handle 0x0014)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0010/char0014
+        00002a6f-0000-1000-8000-00805f9b34fb
+        Humidity
+Descriptor (Handle 0x0016)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0010/char0014/desc0016
+        00002902-0000-1000-8000-00805f9b34fb
+        Client Characteristic Configuration
+Characteristic (Handle 0x0011)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0010/char0011
+        00002a1f-0000-1000-8000-00805f9b34fb
+        Unknown
+Descriptor (Handle 0x0013)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0010/char0011/desc0013
+        00002902-0000-1000-8000-00805f9b34fb
+        Client Characteristic Configuration
+Primary Service (Handle 0x000c)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service000c
+        0000180f-0000-1000-8000-00805f9b34fb
+        Battery Service
+Characteristic (Handle 0x000d)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service000c/char000d
+        00002a19-0000-1000-8000-00805f9b34fb
+        Battery Level
+Descriptor (Handle 0x000f)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service000c/char000d/desc000f
+        00002902-0000-1000-8000-00805f9b34fb
+        Client Characteristic Configuration
+Primary Service (Handle 0x0008)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0008
+        00001801-0000-1000-8000-00805f9b34fb
+        Generic Attribute Profile
+Characteristic (Handle 0x0009)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0008/char0009
+        00002a05-0000-1000-8000-00805f9b34fb
+        Service Changed
+Descriptor (Handle 0x000b)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0008/char0009/desc000b
+        00002902-0000-1000-8000-00805f9b34fb
+        Client Characteristic Configuration
+Primary Service (Handle 0x0001)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0001
+        00001800-0000-1000-8000-00805f9b34fb
+        Generic Access Profile
+Characteristic (Handle 0x0006)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0001/char0006
+        00002a04-0000-1000-8000-00805f9b34fb
+        Peripheral Preferred Connection Parameters
+Characteristic (Handle 0x0004)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0001/char0004
+        00002a01-0000-1000-8000-00805f9b34fb
+        Appearance
+Characteristic (Handle 0x0002)
+        /org/bluez/hci0/dev_A4_C1_38_5E_2D_4D/service0001/char0002
+        00002a00-0000-1000-8000-00805f9b34fb
+        Device Name
