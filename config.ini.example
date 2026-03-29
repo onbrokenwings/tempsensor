@@ -1,0 +1,24 @@
+[ble]
+# Prefer the MAC address for stable deployments.
+address = AA:BB:CC:DD:EE:FF
+# Optional fallback if you prefer resolving by name.
+name = ATC_123456
+
+[writer]
+db_path = data/trastero.sqlite3
+cache_path = data/latest.json
+poll_interval = 10
+save_interval = 300
+temp_delta = 0.3
+humidity_delta = 2.0
+battery_delta = 1.0
+
+[mock]
+enabled = false
+seed = 1234
+start_temp = 21.5
+start_humidity = 48.0
+start_battery = 100
+temp_jitter = 0.08
+humidity_jitter = 0.35
+battery_drain = 0.01

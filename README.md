@@ -107,6 +107,16 @@ python3 ble_reader.py
 
 It will try to read temperature, humidity, and battery every few seconds.
 
+## ⚙️ Runtime Configuration
+
+For the deployed writer, copy `config.ini.example` to `config.ini` and set the BLE device MAC or name there.
+
+Use `ble_sqlite_writer.py --mock` to generate synthetic readings and test SQLite plus the web app without the physical sensor.
+Add `--mock-count 100` if you want the mock to stop after a finite number of samples.
+
+The writer stores the latest live reading in `data/latest.json` by default so the dashboard can refresh without waiting for the next SQLite insert.
+If you deploy on a device with a different cache location, pass `--cache-path /run/trastero/latest.json` or set it in `config.ini`.
+
 ## ⚙️ Setup
 
 ### 1. Install OS
@@ -155,6 +165,8 @@ Access:
 ```
 http://<raspberry-ip>:5000
 ```
+
+The dashboard auto-refreshes the latest reading every 5 seconds.
 
 ---
 
