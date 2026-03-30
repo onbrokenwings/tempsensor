@@ -11,27 +11,18 @@ from typing import Optional
 SCHEMA = """
 PRAGMA journal_mode=WAL;
 
-CREATE TABLE IF NOT EXISTS sensors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    address TEXT NOT NULL UNIQUE,
-    name TEXT,
-    first_seen TEXT NOT NULL,
-    last_seen TEXT NOT NULL,
-    enabled INTEGER NOT NULL DEFAULT 1
-);
-
 CREATE TABLE IF NOT EXISTS readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sensor_id INTEGER NOT NULL,
     ts_utc TEXT NOT NULL,
+    address TEXT NOT NULL,
+    name TEXT,
     temperature_c REAL,
     humidity_pct REAL,
-    battery_pct REAL,
-    FOREIGN KEY(sensor_id) REFERENCES sensors(id)
+    battery_pct REAL
 );
 
-CREATE INDEX IF NOT EXISTS idx_readings_sensor_ts
-ON readings(sensor_id, ts_utc);
+CREATE INDEX IF NOT EXISTS idx_readings_address_ts
+ON readings(address, ts_utc);
 
 CREATE INDEX IF NOT EXISTS idx_readings_ts
 ON readings(ts_utc);
@@ -46,28 +37,47 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def has_column(conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row[1] == column_name for row in rows)
+
+
 def init_db(db_path: str | Path) -> None:
     with connect(db_path) as conn:
-        conn.executescript(SCHEMA)
+        conn.execute("PRAGMA journal_mode=WAL;")
 
+        if not table_exists(conn, "readings"):
+            conn.executescript(SCHEMA)
+            return
 
-def upsert_sensor(conn: sqlite3.Connection, address: str, name: str | None, ts_utc: str) -> int:
-    row = conn.execute("SELECT id FROM sensors WHERE address = ?", (address,)).fetchone()
-    if row is None:
-        cursor = conn.execute(
-            """
-            INSERT INTO sensors (address, name, first_seen, last_seen, enabled)
-            VALUES (?, ?, ?, ?, 1)
-            """,
-            (address, name, ts_utc, ts_utc),
-        )
-        return int(cursor.lastrowid)
+        if not has_column(conn, "readings", "address"):
+            if table_exists(conn, "sensors"):
+                conn.execute("ALTER TABLE readings RENAME TO readings_old")
+                conn.executescript(SCHEMA)
+                conn.execute(
+                    """
+                    INSERT INTO readings (id, ts_utc, address, name, temperature_c, humidity_pct, battery_pct)
+                    SELECT r.id, r.ts_utc, s.address, s.name, r.temperature_c, r.humidity_pct, r.battery_pct
+                    FROM readings_old r
+                    JOIN sensors s ON s.id = r.sensor_id
+                    """
+                )
+                conn.execute("DROP TABLE readings_old")
+                conn.execute("DROP TABLE IF EXISTS sensors")
+            else:
+                conn.executescript(SCHEMA)
+            return
 
-    conn.execute(
-        "UPDATE sensors SET name = COALESCE(?, name), last_seen = ? WHERE id = ?",
-        (name, ts_utc, int(row["id"])),
-    )
-    return int(row["id"])
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_readings_address_ts ON readings(address, ts_utc)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings(ts_utc)")
 
 
 def insert_reading(
@@ -80,13 +90,12 @@ def insert_reading(
     humidity_pct: Optional[float],
     battery_pct: Optional[float],
 ) -> int:
-    sensor_id = upsert_sensor(conn, address, name, ts_utc)
     cursor = conn.execute(
         """
-        INSERT INTO readings (sensor_id, ts_utc, temperature_c, humidity_pct, battery_pct)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO readings (ts_utc, address, name, temperature_c, humidity_pct, battery_pct)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (sensor_id, ts_utc, temperature_c, humidity_pct, battery_pct),
+        (ts_utc, address, name, temperature_c, humidity_pct, battery_pct),
     )
     return int(cursor.lastrowid)
 
@@ -95,21 +104,19 @@ def get_latest_reading(conn: sqlite3.Connection, address: str | None = None) -> 
     if address is None:
         return conn.execute(
             """
-            SELECT r.*, s.address, s.name
-            FROM readings r
-            JOIN sensors s ON s.id = r.sensor_id
-            ORDER BY r.ts_utc DESC, r.id DESC
+            SELECT *
+            FROM readings
+            ORDER BY ts_utc DESC, id DESC
             LIMIT 1
             """
         ).fetchone()
 
     return conn.execute(
         """
-        SELECT r.*, s.address, s.name
-        FROM readings r
-        JOIN sensors s ON s.id = r.sensor_id
-        WHERE s.address = ?
-        ORDER BY r.ts_utc DESC, r.id DESC
+        SELECT *
+        FROM readings
+        WHERE address = ?
+        ORDER BY ts_utc DESC, id DESC
         LIMIT 1
         """,
         (address,),
@@ -123,20 +130,19 @@ def get_history(
     since_utc: str | None = None,
 ) -> list[sqlite3.Row]:
     query = [
-        "SELECT r.*, s.address, s.name",
-        "FROM readings r",
-        "JOIN sensors s ON s.id = r.sensor_id",
+        "SELECT *",
+        "FROM readings",
         "WHERE 1=1",
     ]
     params: list[object] = []
 
     if address is not None:
-        query.append("AND s.address = ?")
+        query.append("AND address = ?")
         params.append(address)
 
     if since_utc is not None:
-        query.append("AND r.ts_utc >= ?")
+        query.append("AND ts_utc >= ?")
         params.append(since_utc)
 
-    query.append("ORDER BY r.ts_utc ASC, r.id ASC")
+    query.append("ORDER BY ts_utc ASC, id ASC")
     return conn.execute("\n".join(query), params).fetchall()

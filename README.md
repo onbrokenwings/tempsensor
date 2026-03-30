@@ -72,7 +72,8 @@ BLE Sensor (Xiaomi LYWSD03MMC)
 ### 💾 Data Storage
 
 * Local SQLite database
-* Timestamped records
+* Minimal schema with a single `readings` table
+* Each row stores timestamp, sensor MAC, sensor name, temperature, humidity and battery
 
 ### 🌐 Web Interface
 
@@ -115,6 +116,7 @@ Use `ble_sqlite_writer.py --mock` to generate synthetic readings and test SQLite
 Add `--mock-count 100` if you want the mock to stop after a finite number of samples.
 
 The writer stores the latest live reading in `data/latest.json` by default so the dashboard can refresh without waiting for the next SQLite insert.
+The SQLite DB is intentionally simple: a single `readings` table stores timestamp, address, name, temperature, humidity and battery.
 If you deploy on a device with a different cache location, pass `--cache-path /run/trastero/latest.json` or set it in `config.ini`.
 
 ## ⚙️ Setup

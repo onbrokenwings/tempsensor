@@ -43,7 +43,6 @@ def row_to_dict(row) -> dict:
     local = dt.astimezone()
     return {
         "id": row["id"],
-        "sensor_id": row["sensor_id"],
         "address": row["address"],
         "name": row["name"],
         "ts_utc": ts_utc,
@@ -89,20 +88,21 @@ def aggregate_rows(rows: list, bucket: str) -> list[dict]:
     grouped: dict[tuple[str, str], list] = defaultdict(list)
 
     for row in rows:
-        ts = datetime.fromisoformat(row["ts_utc"])
-        bucket_ts = bucket_start(ts, bucket).isoformat()
-        grouped[(row["address"], bucket_ts)].append(row)
+        ts = datetime.fromisoformat(row["ts_utc"].replace("Z", "+00:00"))
+        bucket_ts = bucket_start(ts, bucket)
+        grouped[(row["address"], bucket_ts.isoformat())].append(row)
 
     output: list[dict] = []
-    for (address, bucket_ts), bucket_rows in sorted(grouped.items(), key=lambda item: item[0][1]):
+    for (address, bucket_ts_iso), bucket_rows in sorted(grouped.items(), key=lambda item: item[0][1]):
         temperatures = [r["temperature_c"] for r in bucket_rows if r["temperature_c"] is not None]
         humidities = [r["humidity_pct"] for r in bucket_rows if r["humidity_pct"] is not None]
         last = bucket_rows[-1]
+        bucket_ts = datetime.fromisoformat(bucket_ts_iso).astimezone()
         output.append(
             {
                 "address": address,
                 "name": last["name"],
-                "ts_utc": bucket_ts,
+                "ts_local": bucket_ts.strftime("%Y-%m-%d %H:%M"),
                 "count": len(bucket_rows),
                 "temperature_c": mean(temperatures) if temperatures else None,
                 "humidity_pct": mean(humidities) if humidities else None,
@@ -171,6 +171,11 @@ def create_app(db_path: str, cache_path: str) -> Flask:
                     <div class="value" id="current-battery">{{ format_number(latest.battery_pct if latest else None, '%') }}</div>
                   </div>
                   <div class="card">
+                    <div class="muted">Sensor</div>
+                    <div class="value" id="current-sensor">{{ latest.name or latest.address if latest else '—' }}</div>
+                    <div class="subvalue">MAC / nombre</div>
+                  </div>
+                  <div class="card">
                     <div class="muted">Fecha</div>
                     <div class="value" id="current-date">{{ latest.date if latest else '—' }}</div>
                     <div class="subvalue">Última lectura</div>
@@ -185,12 +190,12 @@ def create_app(db_path: str, cache_path: str) -> Flask:
                 <h2>Últimas 24h</h2>
                 <table>
                   <thead>
-                    <tr><th>Hora</th><th>Temp</th><th>Humedad</th><th>Muestras</th></tr>
+                    <tr><th>Fecha / hora local</th><th>Temp</th><th>Humedad</th><th>Muestras</th></tr>
                   </thead>
                   <tbody>
                     {% for row in history %}
                     <tr>
-                      <td>{{ row.ts_utc }}</td>
+                      <td>{{ row.ts_local }}</td>
                       <td>{{ '%.2f'|format(row.temperature_c) if row.temperature_c is not none else '—' }}</td>
                       <td>{{ '%.2f'|format(row.humidity_pct) if row.humidity_pct is not none else '—' }}</td>
                       <td>{{ row.count }}</td>
@@ -206,6 +211,7 @@ def create_app(db_path: str, cache_path: str) -> Flask:
                   const temperatureEl = document.getElementById('current-temperature');
                   const humidityEl = document.getElementById('current-humidity');
                   const batteryEl = document.getElementById('current-battery');
+                  const sensorEl = document.getElementById('current-sensor');
                   const dateEl = document.getElementById('current-date');
                   const timeEl = document.getElementById('current-time');
 
@@ -220,6 +226,7 @@ def create_app(db_path: str, cache_path: str) -> Flask:
                         temperatureEl.textContent = '—';
                         humidityEl.textContent = '—';
                         batteryEl.textContent = '—';
+                        sensorEl.textContent = '—';
                         dateEl.textContent = '—';
                         timeEl.textContent = '—';
                         return;
@@ -228,6 +235,7 @@ def create_app(db_path: str, cache_path: str) -> Flask:
                       temperatureEl.textContent = fmt(data.temperature_c, '°C');
                       humidityEl.textContent = fmt(data.humidity_pct, '%');
                       batteryEl.textContent = fmt(data.battery_pct, '%', 0);
+                      sensorEl.textContent = data.name || data.address || '—';
                       dateEl.textContent = data.date || '—';
                       timeEl.textContent = data.time || '—';
                     } catch (error) {
