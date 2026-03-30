@@ -18,7 +18,13 @@ const formatNumber = (value, suffix, digits = 2) => {
   return `${Number(value).toFixed(digits)} ${suffix}`;
 };
 
-const formatChartLabel = (tsLocal, range) => {
+const chartBucketForRange = (range) => {
+  if (range === '1M') return 'week';
+  if (range === '24h') return 'hour';
+  return 'day';
+};
+
+const formatChartTickLabel = (tsLocal, range, index) => {
   const date = new Date(tsLocal.replace(' ', 'T'));
   if (Number.isNaN(date.getTime())) {
     return tsLocal;
@@ -27,10 +33,17 @@ const formatChartLabel = (tsLocal, range) => {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
 
   if (range === '24h') {
-    return `${hour}:${minute}`;
+    return [9, 17, 22].includes(date.getHours()) ? `${hour}:00` : '';
+  }
+
+  if (range === '7d') {
+    return index % 2 === 0 ? `${day}/${month}` : '';
+  }
+
+  if (range === '14d') {
+    return index % 3 === 0 ? `${day}/${month}` : '';
   }
 
   return `${day}/${month}`;
@@ -65,11 +78,15 @@ const createChart = (canvasId, label, color, yMin = undefined, yMax = undefined)
       scales: {
         x: {
           grid: { display: false },
-          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+          ticks: {
+            display: true,
+            maxRotation: 0,
+            autoSkip: false,
+          },
         },
         y: {
           beginAtZero: false,
-          grid: { color: '#eef2ff' },
+          grid: { display: false },
           ticks: {
             precision: 0,
             maxTicksLimit: 6,
@@ -82,9 +99,10 @@ const createChart = (canvasId, label, color, yMin = undefined, yMax = undefined)
   });
 };
 
-const updateChart = (chart, labels, values) => {
+const updateChart = (chart, labels, values, range) => {
   chart.data.labels = labels;
   chart.data.datasets[0].data = values;
+  chart.options.scales.x.ticks.callback = (value, index) => formatChartTickLabel(labels[index] ?? value, range, index);
   chart.update();
 };
 
@@ -127,20 +145,30 @@ const loadLatest = async () => {
 
 const loadHistory = async (range) => {
   try {
-    const response = await fetch(`/api/history?range=${range}`, { cache: 'no-store' });
+    const response = await fetch(`/api/history?range=${range}&bucket=${chartBucketForRange(range)}`, { cache: 'no-store' });
     if (!response.ok) return;
     const rows = await response.json();
-    const labels = rows.map((row) => formatChartLabel(row.ts_local, range));
+    const labels = rows.map((row) => row.ts_local);
     const temperatureValues = rows.map((row) => (row.temperature_c === null ? null : Number(row.temperature_c)));
     const humidityValues = rows.map((row) => (row.humidity_pct === null ? null : Number(row.humidity_pct)));
     const batteryValues = rows.map((row) => (row.battery_pct === null ? null : Number(row.battery_pct)));
 
-    updateChart(state.charts.temperature, labels, temperatureValues);
-    updateChart(state.charts.humidity, labels, humidityValues);
-    updateChart(state.charts.battery, labels, batteryValues);
-    renderHistoryTable(rows);
+    updateChart(state.charts.temperature, labels, temperatureValues, range);
+    updateChart(state.charts.humidity, labels, humidityValues, range);
+    updateChart(state.charts.battery, labels, batteryValues, range);
   } catch (err) {
     console.error('Error fetching history:', err);
+  }
+};
+
+const loadHistoryTable = async (range) => {
+  try {
+    const response = await fetch(`/api/history?range=${range}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const rows = await response.json();
+    renderHistoryTable(rows);
+  } catch (err) {
+    console.error('Error fetching history table:', err);
   }
 };
 
@@ -161,12 +189,14 @@ const init = () => {
       state.currentRange = selected;
       setActiveRangeButton(selected);
       loadHistory(selected);
+      loadHistoryTable(selected);
     });
   });
 
   setActiveRangeButton(state.currentRange);
   loadLatest();
   loadHistory(state.currentRange);
+  loadHistoryTable(state.currentRange);
   setInterval(loadLatest, 5000);
 };
 

@@ -84,6 +84,9 @@ def bucket_start(ts: datetime, bucket: str) -> datetime:
         return ts.replace(minute=0, second=0, microsecond=0)
     if bucket == "day":
         return ts.replace(hour=0, minute=0, second=0, microsecond=0)
+    if bucket == "week":
+        week_start = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+        return week_start - timedelta(days=week_start.weekday())
     return ts
 
 
