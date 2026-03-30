@@ -114,6 +114,7 @@ For the deployed writer, copy `config.ini.example` to `config.ini` and set the B
 
 Use `ble_sqlite_writer.py --mock` to generate synthetic readings and test SQLite plus the web app without the physical sensor.
 Add `--mock-count 100` if you want the mock to stop after a finite number of samples.
+Use `python3 ble_sqlite_writer.py --mock --mock-count 288` to fill the DB with recent synthetic samples, or `--seed-history --seed-history-count 288 --seed-history-hours 48` to preload a historical baseline in one shot.
 
 The writer stores the latest live reading in `data/latest.json` by default so the dashboard can refresh without waiting for the next SQLite insert.
 The SQLite DB is intentionally simple: a single `readings` table stores timestamp, address, name, temperature, humidity and battery.

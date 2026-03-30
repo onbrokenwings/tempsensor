@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trastero Monitor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+  <script src="{{ url_for('static', filename='chart.umd.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='main.js') }}" defer></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <h1>Trastero Monitor</h1>
+        <p>Lectura local offline desde SQLite. Auto-actualiza cada 5 segundos.</p>
+      </div>
+      <div class="range-controls" role="group" aria-label="Controles de rango temporal">
+        {% for key in ['24h', '7d', '14d', '1M'] %}
+        <button type="button" class="range-button" data-range="{{ key }}">{{ key }}</button>
+        {% endfor %}
+      </div>
+    </header>
+
+    <section class="grid cards">
+      <article class="card">
+        <div class="card-label">Temperatura actual</div>
+        <div class="card-value" id="current-temperature">{{ format_number(latest.temperature_c if latest else None, '°C') }}</div>
+      </article>
+      <article class="card">
+        <div class="card-label">Humedad actual</div>
+        <div class="card-value" id="current-humidity">{{ format_number(latest.humidity_pct if latest else None, '%') }}</div>
+      </article>
+      <article class="card">
+        <div class="card-label">Batería</div>
+        <div class="card-value" id="current-battery">{{ format_number(latest.battery_pct if latest else None, '%') }}</div>
+      </article>
+      <article class="card">
+        <div class="card-label">Última lectura</div>
+        <div class="card-value" id="current-date">{{ latest.date if latest else '—' }}</div>
+        <div class="card-subvalue" id="current-time">{{ latest.time if latest else '—' }}</div>
+      </article>
+    </section>
+
+    <section class="charts">
+      <div class="chart-card">
+        <div class="chart-header"><strong>Temperatura</strong></div>
+        <div class="chart-canvas"><canvas id="temperature-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><strong>Humedad</strong></div>
+        <div class="chart-canvas"><canvas id="humidity-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><strong>Batería</strong></div>
+        <div class="chart-canvas"><canvas id="battery-chart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="history-section">
+      <div class="section-title">Historial agregado</div>
+      <div class="history-table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Fecha / hora</th>
+              <th>Temp</th>
+              <th>Humedad</th>
+              <th>Muestras</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            {% for row in history %}
+            <tr>
+              <td>{{ row.ts_local }}</td>
+              <td>{{ '%.2f'|format(row.temperature_c) if row.temperature_c is not none else '—' }}</td>
+              <td>{{ '%.2f'|format(row.humidity_pct) if row.humidity_pct is not none else '—' }}</td>
+              <td>{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

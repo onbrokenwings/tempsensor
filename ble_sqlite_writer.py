@@ -9,7 +9,7 @@ import configparser
 import json
 import random
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +134,25 @@ def write_latest_cache(cache_path: str, payload: dict[str, Any]) -> None:
         tmp_path.replace(path)
     except OSError as exc:
         print(f"Aviso: no se pudo escribir la caché en RAM ({cache_path}): {exc}")
+
+
+def save_snapshot(
+    conn,
+    *,
+    address: str,
+    name: str | None,
+    ts_utc: datetime,
+    snapshot: SensorSnapshot,
+) -> None:
+    insert_reading(
+        conn,
+        address=address,
+        name=name,
+        ts_utc=ts_utc.isoformat(timespec="seconds"),
+        temperature_c=snapshot.temperature.value,
+        humidity_pct=snapshot.humidity.value,
+        battery_pct=snapshot.battery.value,
+    )
 
 
 class MockSensor:
@@ -312,6 +331,58 @@ async def persist_mock_sensor(config: WriterConfig, mock_count: int | None = Non
         await asyncio.sleep(config.poll_interval)
 
 
+async def seed_mock_history(
+    config: WriterConfig,
+    *,
+    sample_count: int,
+    duration_hours: float,
+) -> None:
+    if sample_count < 2:
+        raise ValueError("sample_count debe ser mayor o igual que 2")
+    if duration_hours <= 0:
+        raise ValueError("duration_hours debe ser mayor que 0")
+
+    db_path = config.db_path
+    init_db(db_path)
+    mock = MockSensor(
+        seed=config.mock_seed,
+        temp=config.mock_start_temp,
+        humidity=config.mock_start_humidity,
+        battery=config.mock_start_battery,
+        temp_jitter=config.mock_temp_jitter,
+        humidity_jitter=config.mock_humidity_jitter,
+        battery_drain=config.mock_battery_drain,
+    )
+    address = config.address or "MOCK:00:00:00:00"
+    name = config.name or "mock-sensor"
+
+    start_ts = utc_now() - timedelta(hours=duration_hours)
+    step = timedelta(seconds=(duration_hours * 3600.0) / (sample_count - 1))
+
+    print(f"\nSembrando histórico sintético: {sample_count} muestras en {duration_hours:g}h...\n")
+    last_payload: dict[str, Any] | None = None
+
+    with connect(db_path) as conn:
+        for index in range(sample_count):
+            snapshot = mock.snapshot()
+            ts_utc = start_ts + (step * index)
+            save_snapshot(
+                conn,
+                address=address,
+                name=name,
+                ts_utc=ts_utc,
+                snapshot=snapshot,
+            )
+            last_payload = snapshot_payload(ts_utc=ts_utc, address=address, name=name, snapshot=snapshot)
+
+        conn.commit()
+
+    if last_payload is not None:
+        write_latest_cache(config.cache_path, last_payload)
+
+    print("Seed histórico completado.")
+
+
 async def resolve_ble_target(config: WriterConfig, scan_timeout: float) -> object:
     _, BleakScanner = load_bleak_runtime()
 
@@ -345,6 +416,9 @@ async def main() -> None:
     parser.add_argument("--battery-delta", type=float, default=None, help="Sobrescribe el delta mínimo de batería para guardar.")
     parser.add_argument("--mock", action="store_true", help="Ejecuta el writer con datos sintéticos.")
     parser.add_argument("--mock-count", type=int, default=None, help="Número de muestras mock a generar y detenerse.")
+    parser.add_argument("--seed-history", action="store_true", help="Carga un histórico sintético en SQLite y sale.")
+    parser.add_argument("--seed-history-count", type=int, default=288, help="Número de muestras a insertar al sembrar histórico.")
+    parser.add_argument("--seed-history-hours", type=float, default=48.0, help="Ventana temporal total del histórico a sembrar.")
     args = parser.parse_args()
 
     config = load_writer_config(args.config)
@@ -365,6 +439,14 @@ async def main() -> None:
     config.mock_enabled = config.mock_enabled or args.mock
 
     try:
+        if args.seed_history:
+            await seed_mock_history(
+                config,
+                sample_count=args.seed_history_count,
+                duration_hours=args.seed_history_hours,
+            )
+            return
+
         if config.mock_enabled:
             await persist_mock_sensor(config, args.mock_count)
             return
