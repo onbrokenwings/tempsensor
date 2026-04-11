@@ -240,6 +240,67 @@ python3 -c "import sqlite3; conn=sqlite3.connect('/opt/trastero/data/trastero.sq
 cat /opt/trastero/data/latest.json
 ```
 
+## 🌐 Deploy Front on Raspberry Pi Zero W
+
+The web front reuses the same `venv` and reads the same SQLite DB and `latest.json` as the writer.
+
+### 1. Create the systemd service
+
+```bash
+sudo nano /etc/systemd/system/trastero-web.service
+```
+
+Paste this content:
+
+```ini
+[Unit]
+Description=Trastero Web Flask
+After=network.target trastero-writer.service
+Wants=trastero-writer.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/opt/trastero
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/trastero/venv/bin/python /opt/trastero/app.py --db-path /opt/trastero/data/trastero.sqlite3 --cache-path /opt/trastero/data/latest.json --host 0.0.0.0 --port 5000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 2. Reload systemd and enable the service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable trastero-web
+sudo systemctl start trastero-web
+```
+
+### 3. Check status and logs
+
+```bash
+systemctl status trastero-web
+journalctl -u trastero-web -f
+```
+
+### 4. Access the front
+
+Open this URL from a browser:
+
+```text
+http://IP_DE_LA_PI:5000
+```
+
+### 5. Stop the service safely
+
+```bash
+sudo systemctl stop trastero-web
+```
+
 ## ⚙️ Setup
 
 ### 1. Install OS
