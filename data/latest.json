@@ -1,10 +1,10 @@
 {
-  "ts_utc": "2026-03-30T16:59:53+00:00",
-  "date": "2026-03-30",
-  "time": "18:59:53",
+  "ts_utc": "2026-04-11T11:55:55+00:00",
+  "date": "2026-04-11",
+  "time": "13:55:55",
   "address": "A4:C1:38:5E:2D:4D",
-  "name": "ATC_5E2D4D",
-  "temperature_c": 21.14,
-  "humidity_pct": 51.74,
-  "battery_pct": 99.0
+  "name": null,
+  "temperature_c": 19.6,
+  "humidity_pct": 55.0,
+  "battery_pct": 44.0
 }

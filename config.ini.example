@@ -8,6 +8,7 @@ name = ATC_123456
 db_path = data/trastero.sqlite3
 cache_path = data/latest.json
 poll_interval = 10
+retry_interval = 300
 save_interval = 300
 temp_delta = 0.3
 humidity_delta = 2.0

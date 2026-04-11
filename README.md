@@ -119,6 +119,126 @@ Use `python3 ble_sqlite_writer.py --mock --mock-count 288` to fill the DB with r
 The writer stores the latest live reading in `data/latest.json` by default so the dashboard can refresh without waiting for the next SQLite insert.
 The SQLite DB is intentionally simple: a single `readings` table stores timestamp, address, name, temperature, humidity and battery.
 If you deploy on a device with a different cache location, pass `--cache-path /run/trastero/latest.json` or set it in `config.ini`.
+If the BLE sensor is unavailable, the writer keeps running and retries connection every `retry_interval` seconds (default `300`).
+
+## 🚀 Deploy Writer on Raspberry Pi Zero W
+
+### 1. Copy the project to `/opt/trastero`
+
+```bash
+sudo mkdir -p /opt/trastero
+sudo chown -R admin:admin /opt/trastero
+cp -a ~/TempLocalSensor/. /opt/trastero/
+```
+
+### 2. Create the virtual environment
+
+```bash
+cd /opt/trastero
+python3 -m venv venv
+/opt/trastero/venv/bin/pip install -r /opt/trastero/requirements.txt
+```
+
+### 3. Configure the writer
+
+Edit `/opt/trastero/config.ini` and set at least:
+
+- `ble.address` or `ble.name`
+- `writer.db_path`
+- `writer.cache_path`
+- `writer.poll_interval`
+- `writer.retry_interval`
+- `writer.save_interval`
+
+Example:
+
+```ini
+[ble]
+address = A4:C1:38:5E:2D:4D
+
+[writer]
+db_path = data/trastero.sqlite3
+cache_path = data/latest.json
+poll_interval = 10
+retry_interval = 300
+save_interval = 300
+```
+
+### 4. Test it manually
+
+```bash
+cd /opt/trastero
+/opt/trastero/venv/bin/python ble_sqlite_writer.py --config /opt/trastero/config.ini
+```
+
+Expected behavior:
+
+- connects to the BLE sensor
+- prints temperature, humidity, and battery readings
+- writes `data/latest.json`
+- writes rows to `data/trastero.sqlite3`
+
+### 5. Create the systemd service
+
+Create `/etc/systemd/system/trastero-writer.service`:
+
+```ini
+[Unit]
+Description=Trastero BLE Writer
+After=bluetooth.service network.target
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/opt/trastero
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/trastero/venv/bin/python /opt/trastero/ble_sqlite_writer.py --config /opt/trastero/config.ini
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 6. Enable and start the service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable trastero-writer
+sudo systemctl start trastero-writer
+```
+
+### 7. Check status and logs
+
+```bash
+systemctl status trastero-writer
+journalctl -u trastero-writer -f
+```
+
+### 8. Stop the service safely
+
+```bash
+sudo systemctl stop trastero-writer
+```
+
+### 9. Verify BLE recovery
+
+- Turn the sensor off or remove the battery.
+- Confirm the writer logs BLE errors and retries every `retry_interval` seconds.
+- Put the battery back or power the sensor again.
+- Confirm the writer reconnects automatically and resumes writing.
+
+### 10. Quick checks
+
+```bash
+ls -l /opt/trastero/data
+python3 -c "import sqlite3; conn=sqlite3.connect('/opt/trastero/data/trastero.sqlite3'); print(conn.execute('select count(*) from readings').fetchone()[0])"
+cat /opt/trastero/data/latest.json
+```
 
 ## ⚙️ Setup
 

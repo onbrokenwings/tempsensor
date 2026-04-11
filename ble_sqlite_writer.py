@@ -8,6 +8,7 @@ import asyncio
 import configparser
 import json
 import random
+import signal
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -30,6 +31,7 @@ class WriterConfig:
     db_path: str
     cache_path: str
     poll_interval: float
+    retry_interval: float
     save_interval: float
     temp_delta: float
     humidity_delta: float
@@ -76,6 +78,7 @@ def load_writer_config(path: str) -> WriterConfig:
         db_path=get(writer, "db_path", "data/trastero.sqlite3"),
         cache_path=get(writer, "cache_path", "data/latest.json"),
         poll_interval=float(get(writer, "poll_interval", 10.0)),
+        retry_interval=float(get(writer, "retry_interval", 300.0)),
         save_interval=float(get(writer, "save_interval", 300.0)),
         temp_delta=float(get(writer, "temp_delta", 0.3)),
         humidity_delta=float(get(writer, "humidity_delta", 2.0)),
@@ -214,57 +217,62 @@ async def persist_sensor(address_or_device: object, config: WriterConfig) -> Non
 
     last_saved: PersistState | None = None
 
-    async with BleakClient(address_or_device) as client:
-        print("\nConectado. Leyendo y guardando valores...\n")
-        while True:
-            try:
-                snapshot = await read_snapshot(client)
-                now = utc_now()
-                current = PersistState(
-                    ts_utc=now,
-                    temperature_c=snapshot.temperature.value,
-                    humidity_pct=snapshot.humidity.value,
-                    battery_pct=snapshot.battery.value,
-                )
-
-                print(format_snapshot(snapshot))
-                write_latest_cache(
-                    config.cache_path,
-                    snapshot_payload(
+    while True:
+        try:
+            async with BleakClient(address_or_device) as client:
+                print("\nConectado. Leyendo y guardando valores...\n")
+                while True:
+                    snapshot = await read_snapshot(client)
+                    now = utc_now()
+                    current = PersistState(
                         ts_utc=now,
-                        address=getattr(address_or_device, "address", str(address_or_device)),
-                        name=getattr(address_or_device, "name", None),
-                        snapshot=snapshot,
-                    ),
-                )
+                        temperature_c=snapshot.temperature.value,
+                        humidity_pct=snapshot.humidity.value,
+                        battery_pct=snapshot.battery.value,
+                    )
 
-                if should_persist(
-                    current,
-                    last_saved,
-                    save_interval_s=config.save_interval,
-                    temp_delta=config.temp_delta,
-                    humidity_delta=config.humidity_delta,
-                    battery_delta=config.battery_delta,
-                ):
-                    with connect(db_path) as conn:
-                        insert_reading(
-                            conn,
+                    print(format_snapshot(snapshot))
+                    write_latest_cache(
+                        config.cache_path,
+                        snapshot_payload(
+                            ts_utc=now,
                             address=getattr(address_or_device, "address", str(address_or_device)),
                             name=getattr(address_or_device, "name", None),
-                            ts_utc=now.isoformat(timespec="seconds"),
-                            temperature_c=current.temperature_c,
-                            humidity_pct=current.humidity_pct,
-                            battery_pct=current.battery_pct,
-                        )
-                        conn.commit()
-                    last_saved = current
-                    print("Guardado en SQLite.")
+                            snapshot=snapshot,
+                        ),
+                    )
 
-            except Exception as exc:  # noqa: BLE001
-                print(f"Error leyendo o guardando el sensor: {exc}")
-                break
+                    if should_persist(
+                        current,
+                        last_saved,
+                        save_interval_s=config.save_interval,
+                        temp_delta=config.temp_delta,
+                        humidity_delta=config.humidity_delta,
+                        battery_delta=config.battery_delta,
+                    ):
+                        with connect(db_path) as conn:
+                            insert_reading(
+                                conn,
+                                address=getattr(address_or_device, "address", str(address_or_device)),
+                                name=getattr(address_or_device, "name", None),
+                                ts_utc=now.isoformat(timespec="seconds"),
+                                temperature_c=current.temperature_c,
+                                humidity_pct=current.humidity_pct,
+                                battery_pct=current.battery_pct,
+                            )
+                            conn.commit()
+                        last_saved = current
+                        print("Guardado en SQLite.")
 
-            await asyncio.sleep(config.poll_interval)
+                    await asyncio.sleep(config.poll_interval)
+        except asyncio.CancelledError:
+            raise
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error de conexión o lectura BLE: {exc}")
+            print(f"Reintentando en {config.retry_interval:g} segundos...\n")
+            await asyncio.sleep(config.retry_interval)
 
 
 async def persist_mock_sensor(config: WriterConfig, mock_count: int | None = None) -> None:
@@ -410,6 +418,7 @@ async def main() -> None:
     parser.add_argument("--cache-path", default=None, help="Sobrescribe la ruta de la caché live JSON.")
     parser.add_argument("--scan-timeout", type=float, default=8.0, help="Segundos de escaneo BLE.")
     parser.add_argument("--poll-interval", type=float, default=None, help="Sobrescribe los segundos entre lecturas BLE.")
+    parser.add_argument("--retry-interval", type=float, default=None, help="Sobrescribe los segundos entre reintentos BLE.")
     parser.add_argument("--save-interval", type=float, default=None, help="Sobrescribe los segundos máximos entre guardados.")
     parser.add_argument("--temp-delta", type=float, default=None, help="Sobrescribe el delta mínimo de temperatura para guardar.")
     parser.add_argument("--humidity-delta", type=float, default=None, help="Sobrescribe el delta mínimo de humedad para guardar.")
@@ -428,6 +437,8 @@ async def main() -> None:
         config.cache_path = args.cache_path
     if args.poll_interval is not None:
         config.poll_interval = args.poll_interval
+    if args.retry_interval is not None:
+        config.retry_interval = args.retry_interval
     if args.save_interval is not None:
         config.save_interval = args.save_interval
     if args.temp_delta is not None:
@@ -437,6 +448,19 @@ async def main() -> None:
     if args.battery_delta is not None:
         config.battery_delta = args.battery_delta
     config.mock_enabled = config.mock_enabled or args.mock
+
+    loop = asyncio.get_running_loop()
+    current_task = asyncio.current_task()
+
+    def request_shutdown() -> None:
+        if current_task is not None and not current_task.done():
+            current_task.cancel()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, request_shutdown)
+        except NotImplementedError:  # pragma: no cover - non-POSIX fallback
+            signal.signal(sig, lambda *_: request_shutdown())
 
     try:
         if args.seed_history:
@@ -451,8 +475,19 @@ async def main() -> None:
             await persist_mock_sensor(config, args.mock_count)
             return
 
-        target = await resolve_ble_target(config, args.scan_timeout)
-        await persist_sensor(target, config)
+        while True:
+            try:
+                target = await resolve_ble_target(config, args.scan_timeout)
+                await persist_sensor(target, config)
+                return
+            except KeyboardInterrupt:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                print(f"Error de descubrimiento BLE: {exc}")
+                print(f"Reintentando en {config.retry_interval:g} segundos...\n")
+                await asyncio.sleep(config.retry_interval)
+    except asyncio.CancelledError:
+        print("\nSaliendo.")
     except KeyboardInterrupt:
         print("\nSaliendo.")
     except Exception as exc:  # noqa: BLE001
